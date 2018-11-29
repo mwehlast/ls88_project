@@ -1,0 +1,126 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Linear Modelling of Teams (Avg. Goals Conceded)
+----------------------------
+Initial assumption:
+Teams which are only represented a few times are replaced by new teams with same "level" next season.
+
+
+Load libraries
+```{r}
+library(boot)
+library(tidyverse)
+library(broom)
+setwd('~/Library/Mobile Documents/com~apple~CloudDocs/Udveksling/Studie/LS 88 - 3/Project/ls88_project-master')
+```
+
+Load data
+```{r}
+df <- read.csv('grand_total_df.csv')
+```
+
+
+Show data
+```{r}
+head(df)
+```
+
+Pick out needed non-nominal variables
+Points and goals are removed as they effectively consist of other variables in the data
+```{r}
+df <- df %>% 
+      select(-X, -home_team_name, -season_home, -avg_total_goals, 
+            -avg_goals_conceded_home, -avg_goals_conceded_away, -target_variable,
+            -home_points, -away_points)
+```
+
+
+Fit linear model
+```{r}
+model1 <- lm(avg_total_goals_conceded ~ .,
+             data = df)
+```
+
+Print residuals
+```{r}
+summary(model1)
+```
+
+We make a new model with parameters where pval < 0.2
+
+```{r}
+model2 <- lm(avg_total_goals_conceded ~ home_team_goal + home_y1 + home_shoton + home_corners 
+             + away_fouls, 
+             data = df)
+
+summary(model2)
+```
+
+
+Adding the parameter "home_poss"" with the least pval outside the ones before yields the result
+```{r}
+model3 <- lm(avg_total_goals_conceded ~ home_team_goal + home_y1 + home_shoton + home_corners 
+             + away_fouls + home_poss, 
+             data = df)
+
+summary(model3)
+```
+
+
+We see how this changed the significance of home_shoton and home_corners.
+This will be the model forward realizing the significance level is 0.8.
+
+------
+BOOTSTRAPPING
+------
+
+```{r}
+bs <- function(formula, data, indices){
+  d <- data[indices, ] #allows boot to select sample
+  fit <- lm(formula, data = d)
+  return(coef(fit))
+}
+
+#Bootstrapping with 5000 replications
+results <- boot(df, 
+                statistic = bs,
+                R = 5000,
+                formula = formula(model3))
+```
+
+
+Print distributions with model3 values marked in red.
+```{r}
+
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       prob = TRUE,
+       main = variable.names(model3)[i])
+  abline(v = coefficients(model3)[i], col = 'red')#
+}
+```
+
+
+-------------
+SUMMARY
+-------------
+
+7 final parameters were found for the model.
+Looking at the distributions for the bootstrapped values showed that all parameters were likely.
+The coefficents were
+```{r}
+coef(model3)
+```
+
+Our model shows that teams are more likely to have goals scored against them if they play aggressively (get yellow cards) and fail to retain the ball (negative coefficient for home_poss).
+Also, teams that fail to make it to the final part of the pitch to either have a shot on goal or receive a corner kick are more likely to have goals scored against them. However, these to variables were not found
+to be significant on a 95% level and therefore this finding may not hold.
+
+
+
+
+
+
