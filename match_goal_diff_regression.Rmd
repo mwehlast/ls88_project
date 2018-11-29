@@ -58,15 +58,15 @@ df <- df %>%
 ```
 
 
-We scale the variables without centering to not have certain variables dominate too much
-```{r}
-df_scaled <- as.data.frame(scale(df))
-```
-
 Fitting a linear model (iteration 1)
 We have:
 Response variable: Goal Difference
 Explanatory variables: All Others + Intercept
+
+
+-----------------
+MODELLING ROUND 1
+-----------------
 ```{r}
 model1 <- lm(goal_diff ~ .,
               data = df)
@@ -74,32 +74,15 @@ model1 <- lm(goal_diff ~ .,
 print(summary(model1))
 ```
 
-Plot Model1
-```{r}
-#Plot residuals
-plot(model1$residuals)
-```
 Residuals look great. (centered around 0 with SD approximate to 1).
 
-The intercept is insignificant. Will be removed.
-Model 2
-Removing intercept.
-```{r}
-model2 <- lm(goal_diff ~ . -1,
-              data = df)
 
-#Plot residuals
-plot(model2$residuals)
-
-#Print Summary
-print(summary(model2))
-```
 Notice how home_shotoff is significant with a negative effect on the goal difference (teams who miss a lot of shots at home will achieve a worse goal difference). It is also noticeable how getting a lot of corners on your home turf decreases your goal difference.
 Surprisingly, shots on goal do not seem to have a significant effect.
 
--------------------
-BOOTSTRAPPING
--------------------
+---------------------
+BOOTSTRAPPING ROUND 1
+---------------------
 
 Non-parametric bootstrapping for the coeffiecents with 5000 models.
 We do not know the true distribution and use nonparametric bootstrap sampling with replacement accordingly.
@@ -115,26 +98,12 @@ bs <- function(formula, data, indices){
 }
 
 
-#Creating own boostrap method
-bootstrap <- function(data, formula, k){
-  return.matrix <- matrix(nrow = k, ncol = 16)
-  
-  set.seed(200)
-  for(i in 1:k){
-    sample_temp <- sample_n(data, size = nrow(data), replace = TRUE)
-    model_temp <- lm(sample_temp,
-                   formula = formula)
-    return.matrix[i, ] <- coefficients(model_temp)
-  }
-  return(return.matrix)
-}
 
-#results_own <- bootstrap(df_scaled, goal_diff ~. - 1, 5000)
 #Bootstrapping with 5000 replications
 results <- boot(df, 
                 statistic = bs,
                 R = 5000,
-                formula = goal_diff ~ . - 1)
+                formula = formula(model1) )
 
 ```
 
@@ -143,41 +112,141 @@ Plot distributions of parameters
 for(i in 1:length(results$t0)){
   hist(results$t[,i], 
        prob = TRUE,
-       main = colnames(df)[i])
-  abline(v = coefficients(model2)[i], col = 'red')#
+       main = variable.names(model1)[i])
 }
 ```
+
+Coefficients with bootstrap histrograms centered around 0 shows lack of significance of the parameter.
+
+
+Coefficients clearly centered around 0:
+away_y1
+home_shoton
+away_shoton
+away_corners
+
+
+-----------------
+MODELLING ROUND 2
+-----------------
 ```{r}
-coefficients(model2) - apply(results$t, 2, mean)
+model2 <- lm(goal_diff ~ . -away_y1 -home_shoton -away_shoton -away_corners,
+              data = df)
+#Print Summary
+print(summary(model2))
 ```
+
+---------------------
+BOOTSTRAPPING ROUND 2
+---------------------
+
+```{r}
+#Bootstrapping with 5000 replications
+results <- boot(df, 
+                statistic = bs,
+                R = 5000,
+                formula = formula(model2) )
+
+```
+
+Plot distributions of parameters
+```{r}
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       prob = TRUE,
+       main = variable.names(model2)[i])
+}
+```
+
+Variables with close to 0 values:
+away_fouls
+away_poss
+away_shotoff
+
+
+-----------------
+MODELLING ROUND 3
+-----------------
+```{r}
+model3 <- lm(goal_diff ~ . -away_y1 -home_shoton -away_shoton -away_corners
+             -away_fouls -away_poss -away_shotoff,
+              data = df)
+#Print Summary
+print(summary(model3))
+```
+
+---------------------
+BOOTSTRAPPING ROUND 3
+---------------------
+
+```{r}
+#Bootstrapping with 5000 replications
+results <- boot(df, 
+                statistic = bs,
+                R = 5000,
+                formula = formula(model3) )
+
+```
+
+Plot distributions of parameters
+```{r}
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       prob = TRUE,
+       main = variable.names(model3)[i])
+}
+```
+
+Removing home_fouls
+
+-----------------
+MODELLING ROUND 4
+-----------------
+```{r}
+model4 <- lm(goal_diff ~ . -away_y1 -home_shoton -away_shoton -away_corners
+             -away_fouls -away_poss -away_shotoff
+             -home_fouls,
+              data = df)
+#Print Summary
+print(summary(model4))
+```
+
+---------------------
+BOOTSTRAPPING ROUND 4
+---------------------
+
+```{r}
+#Bootstrapping with 5000 replications
+results <- boot(df, 
+                statistic = bs,
+                R = 5000,
+                formula = formula(model4) )
+
+```
+
+Plot distributions of parameters
+```{r}
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       prob = TRUE,
+       main = variable.names(model4)[i])
+}
+```
+
+Model Selection has converged at model4
 
 
 -----------------
 SUMMARY
 -----------------
 
-It was found that parameter values were all extremely likely based on the 5000 repetions of nonparametric bootstrapping based on the histograms below, where the red line represents the found parameter value 
-for the model.
-```{r}
-for(i in 1:length(results$t0)){
-  hist(results$t[,i], 
-       prob = TRUE,
-       main = colnames(df)[i])
-  abline(v = coefficients(model2)[i], col = 'red')#
-}
-```
-
-
-The fitted model (model 2 without intercept) showed well-behaved residuals 
-and significance on 10/16 parameters
-```{r}
-plot(model2$residuals)
-```
-```{r}
-summary(model2)
-```
-
 The model is of the form
 goal_difference = beta1*x1 + beta2*x2 ...,
 
 where goal_difference = home_goal - away_goal
+
+The final model became model 4 with coefficients
+```{r}
+summary(model4)
+```
+
