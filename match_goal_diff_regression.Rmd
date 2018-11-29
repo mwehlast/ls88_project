@@ -1,0 +1,183 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Linear Regression Modelling for Soccer Data
+-------------------------------------------
+
+Load packages and set directories
+```{r}
+library(boot)
+library(tidyverse)
+library(broom)
+setwd('~/Library/Mobile Documents/com~apple~CloudDocs/Udveksling/Studie/LS 88 - 3/Project/ls88_project-master')
+```
+
+
+Load data
+```{r}
+df = read_csv('dataframe.csv')
+```
+
+
+Retain only non-nominal features
+```{r}
+df <- df %>% 
+      select(-X1, -id, -country_id, -league_id, -stage, -date, -match_api_id, -home_team_api_id,
+            -away_team_api_id, -home_team_name, -away_team_name, -season)
+```
+
+
+
+Add Goal Difference as target variable and print distribution
+```{r}
+df <- df %>%
+      mutate(goal_diff = home_team_goal - away_team_goal)
+
+hist(df$goal_diff)
+```
+Looks perfectly normaly distributed.
+
+As the target variable is derived from home_team_goal and away_team_goal we drop these variables.
+```{r}
+df <- df %>% 
+      select(-home_team_goal, -away_team_goal)
+```
+
+
+
+Based on the correlation matrix from the Jupyter Notebook, we will drop variables:
+home_points
+away_points
+
+As these 2 variables have too much correlation with the rest of the variables and are interdependent.
+```{r}
+df <- df %>% 
+      select(-home_points, -away_points)
+```
+
+
+We scale the variables without centering to not have certain variables dominate too much
+```{r}
+df_scaled <- as.data.frame(scale(df))
+```
+
+Fitting a linear model (iteration 1)
+We have:
+Response variable: Goal Difference
+Explanatory variables: All Others + Intercept
+```{r}
+model1 <- lm(goal_diff ~ .,
+              data = df)
+#Print Summary
+print(summary(model1))
+```
+
+Plot Model1
+```{r}
+#Plot residuals
+plot(model1$residuals)
+```
+Residuals look great. (centered around 0 with SD approximate to 1).
+
+The intercept is insignificant. Will be removed.
+Model 2
+Removing intercept.
+```{r}
+model2 <- lm(goal_diff ~ . -1,
+              data = df)
+
+#Plot residuals
+plot(model2$residuals)
+
+#Print Summary
+print(summary(model2))
+```
+Notice how home_shotoff is significant with a negative effect on the goal difference (teams who miss a lot of shots at home will achieve a worse goal difference). It is also noticeable how getting a lot of corners on your home turf decreases your goal difference.
+Surprisingly, shots on goal do not seem to have a significant effect.
+
+-------------------
+BOOTSTRAPPING
+-------------------
+
+Non-parametric bootstrapping for the coeffiecents with 5000 models.
+We do not know the true distribution and use nonparametric bootstrap sampling with replacement accordingly.
+This will use the empirical distribution.
+
+```{r}
+###Code copied from statmethods.net
+#Function to obatin regression weights
+bs <- function(formula, data, indices){
+  d <- data[indices, ] #allows boot to select sample
+  fit <- lm(formula, data = d)
+  return(coef(fit))
+}
+
+
+#Creating own boostrap method
+bootstrap <- function(data, formula, k){
+  return.matrix <- matrix(nrow = k, ncol = 16)
+  
+  set.seed(200)
+  for(i in 1:k){
+    sample_temp <- sample_n(data, size = nrow(data), replace = TRUE)
+    model_temp <- lm(sample_temp,
+                   formula = formula)
+    return.matrix[i, ] <- coefficients(model_temp)
+  }
+  return(return.matrix)
+}
+
+#results_own <- bootstrap(df_scaled, goal_diff ~. - 1, 5000)
+#Bootstrapping with 5000 replications
+results <- boot(df, 
+                statistic = bs,
+                R = 5000,
+                formula = goal_diff ~ . - 1)
+
+```
+
+Plot distributions of parameters
+```{r}
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       prob = TRUE,
+       main = colnames(df)[i])
+  abline(v = coefficients(model2)[i], col = 'red')#
+}
+```
+```{r}
+coefficients(model2) - apply(results$t, 2, mean)
+```
+
+
+-----------------
+SUMMARY
+-----------------
+
+It was found that parameter values were all extremely likely based on the 5000 repetions of nonparametric bootstrapping based on the histograms below, where the red line represents the found parameter value 
+for the model.
+```{r}
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       prob = TRUE,
+       main = colnames(df)[i])
+  abline(v = coefficients(model2)[i], col = 'red')#
+}
+```
+
+
+The fitted model (model 2 without intercept) showed well-behaved residuals 
+and significance on 10/16 parameters
+```{r}
+plot(model2$residuals)
+```
+```{r}
+summary(model2)
+```
+
+The model is of the form
+goal_difference = beta1*x1 + beta2*x2 ...,
+
+where goal_difference = home_goal - away_goal
