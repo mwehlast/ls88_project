@@ -49,32 +49,9 @@ Print residuals
 summary(model1)
 ```
 
-We make a new model with parameters where pval < 0.2
-
-```{r}
-model2 <- lm(avg_total_goals_conceded ~ home_team_goal + home_y1 + home_shoton + home_corners 
-             + away_fouls, 
-             data = df)
-
-summary(model2)
-```
-
-
-Adding the parameter "home_poss"" with the least pval outside the ones before yields the result
-```{r}
-model3 <- lm(avg_total_goals_conceded ~ home_team_goal + home_y1 + home_shoton + home_corners 
-             + away_fouls + home_poss, 
-             data = df)
-
-summary(model3)
-```
-
-
-We see how this changed the significance of home_shoton and home_corners.
-This will be the model forward realizing the significance level is 0.8.
 
 ------
-BOOTSTRAPPING
+BOOTSTRAPPING (1)
 ------
 
 ```{r}
@@ -85,6 +62,96 @@ bs <- function(formula, data, indices){
 }
 
 #Bootstrapping with 5000 replications
+set.seed(200)
+results <- boot(df, 
+                statistic = bs,
+                R = 5000,
+                formula = formula(model1))
+```
+
+
+Plot distributions
+```{r}
+
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       freq = TRUE,
+       main = variable.names(model1)[i])
+}
+```
+
+Coefficients where histograms from bootstrapping are centered around 0 show lack of significance.
+
+Coefficients clearly centered around 0:
+home_shotoff
+home_fouls
+home_r
+away_team_goal
+away_y2
+away_poss
+away_corners
+away_r
+
+---------------
+MODELLING ROUND 2
+---------------
+We leave these variables out and model again
+```{r}
+model2 <- lm(avg_total_goals_conceded ~ . -home_shotoff -home_fouls -home_r -away_team_goal
+                                          -away_team_goal -away_y2 -away_poss -away_corners -away_r,
+             df)
+```
+
+
+--------------
+BOOTSTRAPPING ROUND 2
+--------------
+
+```{r}
+#Bootstrapping with 5000 replications
+set.seed(200)
+results <- boot(df, 
+                statistic = bs,
+                R = 5000,
+                formula = formula(model2))
+```
+
+
+Plot distributions
+```{r}
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       freq = TRUE,
+       main = variable.names(model2)[i])
+}
+```
+
+Coefficients with distributions close around 0:
+home_shoton
+home_corners
+away_shoton
+away_shotoff
+away_fouls
+
+
+-----------------
+MODELLING ROUND 3
+-----------------
+Same as before. Drop these variables and model again
+```{r}
+model3 <- lm(avg_total_goals_conceded ~ . -home_shotoff -home_fouls -home_r -away_team_goal
+                                          -away_team_goal -away_y2 -away_poss -away_corners -away_r
+                                          -home_shoton -home_corners -away_shoton - away_shotoff -away_fouls,
+             df)
+```
+
+
+---------------------
+BOOTSTRAPPING ROUND 3
+---------------------
+```{r}
+#Bootstrapping with 5000 replications
+set.seed(200)
 results <- boot(df, 
                 statistic = bs,
                 R = 5000,
@@ -92,35 +159,56 @@ results <- boot(df,
 ```
 
 
-Print distributions with model3 values marked in red.
+Plot distributions
 ```{r}
-
 for(i in 1:length(results$t0)){
   hist(results$t[,i], 
-       prob = TRUE,
+       freq = TRUE,
        main = variable.names(model3)[i])
-  abline(v = coefficients(model3)[i], col = 'red')#
+}
+```
+
+home_y2 and away_y1 are now near 0
+
+-----------------
+MODELLING ROUND 4
+-----------------
+```{r}
+model4 <- lm(avg_total_goals_conceded ~ . -home_shotoff -home_fouls -home_r -away_team_goal
+                                          -away_team_goal -away_y2 -away_poss -away_corners -away_r
+                                          -home_shoton -home_corners -away_shoton - away_shotoff -away_fouls
+                                          -home_y2 -away_y1,
+             df)
+```
+
+
+---------------------
+BOOTSTRAPPING ROUND 4
+---------------------
+```{r}
+#Bootstrapping with 5000 replications
+set.seed(200)
+results <- boot(df, 
+                statistic = bs,
+                R = 5000,
+                formula = formula(model4))
+```
+
+
+Plot distributions
+```{r}
+for(i in 1:length(results$t0)){
+  hist(results$t[,i], 
+       freq = TRUE,
+       main = variable.names(model4)[i])
 }
 ```
 
 
--------------
-SUMMARY
--------------
-
-7 final parameters were found for the model.
-Looking at the distributions for the bootstrapped values showed that all parameters were likely.
-The coefficents were
+We conclude that all variables will be kept. 
+Leaving us with the model
 ```{r}
-coef(model3)
+summary(model4)
 ```
-
-Our model shows that teams are more likely to have goals scored against them if they play aggressively (get yellow cards) and fail to retain the ball (negative coefficient for home_poss).
-Also, teams that fail to make it to the final part of the pitch to either have a shot on goal or receive a corner kick are more likely to have goals scored against them. However, these to variables were not found
-to be significant on a 95% level and therefore this finding may not hold.
-
-
-
-
 
 
