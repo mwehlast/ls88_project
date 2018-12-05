@@ -14,7 +14,6 @@ Load libraries
 library(boot)
 library(tidyverse)
 library(broom)
-setwd('~/Library/Mobile Documents/com~apple~CloudDocs/Udveksling/Studie/LS 88 - 3/Project/ls88_project-master')
 ```
 
 Load data
@@ -23,15 +22,26 @@ df <- read.csv('grand_total_df.csv')
 ```
 
 
+
 Show data
 ```{r}
 head(df)
 ```
 
+Divide into modelling and test data
+```{r}
+df_model <- df %>% 
+            filter(season_home != '2015/2016')
+
+df_test <- df %>% 
+           filter(season_home == '2015/2016')
+```
+
+
 Pick out needed non-nominal variables
 Points and goals are removed as they effectively consist of other variables in the data
 ```{r}
-df <- df %>% 
+df_model <- df_model %>% 
       select(-X, -home_team_name, -season_home, -avg_total_goals, 
             -avg_goals_conceded_home, -avg_goals_conceded_away, -target_variable,
             -home_points, -away_points)
@@ -41,10 +51,10 @@ df <- df %>%
 Fit linear model
 ```{r}
 model1 <- lm(avg_total_goals_conceded ~ .,
-             data = df)
+             data = df_model)
 ```
 
-Print residuals
+Summarize the model
 ```{r}
 summary(model1)
 ```
@@ -63,7 +73,7 @@ bs <- function(formula, data, indices){
 
 #Bootstrapping with 5000 replications
 set.seed(200)
-results <- boot(df, 
+results <- boot(df_model, 
                 statistic = bs,
                 R = 5000,
                 formula = formula(model1))
@@ -99,7 +109,7 @@ We leave these variables out and model again
 ```{r}
 model2 <- lm(avg_total_goals_conceded ~ . -home_shotoff -home_fouls -home_r -away_team_goal
                                           -away_team_goal -away_y2 -away_poss -away_corners -away_r,
-             df)
+             df_model)
 ```
 
 
@@ -110,7 +120,7 @@ BOOTSTRAPPING ROUND 2
 ```{r}
 #Bootstrapping with 5000 replications
 set.seed(200)
-results <- boot(df, 
+results <- boot(df_model, 
                 statistic = bs,
                 R = 5000,
                 formula = formula(model2))
@@ -142,7 +152,7 @@ Same as before. Drop these variables and model again
 model3 <- lm(avg_total_goals_conceded ~ . -home_shotoff -home_fouls -home_r -away_team_goal
                                           -away_team_goal -away_y2 -away_poss -away_corners -away_r
                                           -home_shoton -home_corners -away_shoton - away_shotoff -away_fouls,
-             df)
+             df_model)
 ```
 
 
@@ -152,7 +162,7 @@ BOOTSTRAPPING ROUND 3
 ```{r}
 #Bootstrapping with 5000 replications
 set.seed(200)
-results <- boot(df, 
+results <- boot(df_model, 
                 statistic = bs,
                 R = 5000,
                 formula = formula(model3))
@@ -178,7 +188,7 @@ model4 <- lm(avg_total_goals_conceded ~ . -home_shotoff -home_fouls -home_r -awa
                                           -away_team_goal -away_y2 -away_poss -away_corners -away_r
                                           -home_shoton -home_corners -away_shoton - away_shotoff -away_fouls
                                           -home_y2 -away_y1,
-             df)
+             df_model)
 ```
 
 
@@ -188,7 +198,7 @@ BOOTSTRAPPING ROUND 4
 ```{r}
 #Bootstrapping with 5000 replications
 set.seed(200)
-results <- boot(df, 
+results <- boot(df_model, 
                 statistic = bs,
                 R = 5000,
                 formula = formula(model4))
@@ -211,4 +221,20 @@ Leaving us with the model
 summary(model4)
 ```
 
+-----------------
+TESTING THE MODEL
+-----------------
 
+We will test the model on the data from the season 2015/2016 to evaluate the performance of the model.
+The error estimate will be the Mean Aboslute Error (MAE) as this allows us to estimate by how much our model 
+is off on average from the actual number of goals conceded 
+
+```{r}
+predictions <- predict(model4, newdata= df_test)
+
+MAE <- sum(abs(predictions - df_test$avg_total_goals_conceded)) / nrow(df_test)
+
+MAE
+```
+
+We observe that the model on average predicts 0.2 average goals conceded from the true value.
