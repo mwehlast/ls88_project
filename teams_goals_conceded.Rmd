@@ -220,21 +220,3 @@ Leaving us with the model
 ```{r}
 summary(model4)
 ```
-
------------------
-TESTING THE MODEL
------------------
-
-We will test the model on the data from the season 2015/2016 to evaluate the performance of the model.
-The error estimate will be the Mean Aboslute Error (MAE) as this allows us to estimate by how much our model 
-is off on average from the actual number of goals conceded 
-
-```{r}
-predictions <- predict(model4, newdata= df_test)
-
-MAE <- sum(abs(predictions - df_test$avg_total_goals_conceded)) / nrow(df_test)
-
-MAE
-```
-
-We observe that the model on average predicts 0.2 average goals conceded from the true value.
